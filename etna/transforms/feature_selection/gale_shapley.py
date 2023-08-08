@@ -10,6 +10,9 @@ from typing_extensions import Literal
 
 from etna.analysis import RelevanceTable
 from etna.core import BaseMixin
+from etna.distributions import BaseDistribution
+from etna.distributions import CategoricalDistribution
+from etna.distributions import IntDistribution
 from etna.transforms.feature_selection.base import BaseFeatureSelectionTransform
 
 
@@ -84,7 +87,7 @@ class SegmentGaleShapley(BaseGaleShapley):
 
         Returns
         -------
-        name: str
+        name:
             name of feature
         """
         if self.last_candidate is None:
@@ -110,7 +113,7 @@ class FeatureGaleShapley(BaseGaleShapley):
 
         Returns
         -------
-        is_better: bool
+        is_better:
             returns True if given segment is a better candidate than current match.
         """
         if self.tmp_match is None or self.tmp_match_rank is None:
@@ -175,7 +178,7 @@ class GaleShapleyMatcher(BaseMixin):
 
         Returns
         -------
-        success: bool
+        success:
             True if there is at least one match attempt at the iteration
 
         Notes
@@ -209,7 +212,7 @@ class GaleShapleyMatcher(BaseMixin):
 
         Returns
         -------
-        matching: Dict[str, str]
+        matching:
             matching dict of segment x feature
         """
         success_run = True
@@ -221,13 +224,23 @@ class GaleShapleyMatcher(BaseMixin):
 
 
 class GaleShapleyFeatureSelectionTransform(BaseFeatureSelectionTransform):
-    """GaleShapleyFeatureSelectionTransform provides feature filtering with Gale-Shapley matching algo according to relevance table.
-
+    """Transform that provides feature filtering by Gale-Shapley matching algorithm according to the relevance table.
 
     Notes
     -----
     Transform works with any type of features, however most of the models works only with regressors.
     Therefore, it is recommended to pass the regressors into the feature selection transforms.
+
+    As input, we have a table of relevances with size :math:`N\_{f} \times N\_{s}` where :math:`N\_{f}` -- number of features,
+    :math:`N\_{s}` -- number of segments.
+    Procedure of filtering features consist of :math:`\lceil \frac{k}{N\_{s}} \rceil` iterations.
+    Algorithm of each iteration:
+
+    - build a matching between segments and features by `Gale–Shapley algorithm <https://en.wikipedia.org/wiki/Gale%E2%80%93Shapley_algorithm>`_
+    according to the relevance table, during the matching segments send proposals to features;
+    - select features to add by taking matched feature for each segment;
+    - add selected features to accumulated list of selected features taking into account that this list shouldn't exceed the size of ``top_k``;
+    - remove added features from future consideration.
     """
 
     def __init__(
@@ -287,7 +300,8 @@ class GaleShapleyFeatureSelectionTransform(BaseFeatureSelectionTransform):
             return 1
         if top_k < n_segments:
             warnings.warn(
-                f"Given top_k={top_k} is less than n_segments. Algo will filter data without Gale-Shapley run."
+                f"Given top_k={top_k} is less than n_segments={n_segments}. "
+                f"Algo will filter data without Gale-Shapley run."
             )
             return 1
         return ceil(top_k / n_segments)
@@ -306,7 +320,7 @@ class GaleShapleyFeatureSelectionTransform(BaseFeatureSelectionTransform):
 
         Returns
         -------
-        matching dict: Dict[str, str]
+        matching dict:
             dict of segment x feature
         """
         gssegments = [
@@ -344,7 +358,7 @@ class GaleShapleyFeatureSelectionTransform(BaseFeatureSelectionTransform):
         selected_features = [feature[0] for feature in sorted_features][:n]
         return selected_features
 
-    def fit(self, df: pd.DataFrame) -> "GaleShapleyFeatureSelectionTransform":
+    def _fit(self, df: pd.DataFrame) -> "GaleShapleyFeatureSelectionTransform":
         """Fit Gale-Shapley algo and find a pool of ``top_k`` features.
 
         Parameters
@@ -371,7 +385,7 @@ class GaleShapleyFeatureSelectionTransform(BaseFeatureSelectionTransform):
                 segment_features_ranking=segment_features_ranking,
                 feature_segments_ranking=feature_segments_ranking,
             )
-            if step == gale_shapley_steps_number - 1:
+            if step == gale_shapley_steps_number - 1 and last_step_features_number != 0:
                 selected_features = self._process_last_step(
                     matches=matches,
                     relevance_table=relevance_table,
@@ -385,3 +399,20 @@ class GaleShapleyFeatureSelectionTransform(BaseFeatureSelectionTransform):
                 segment_features_ranking=segment_features_ranking, features_to_drop=selected_features
             )
         return self
+
+    def params_to_tune(self) -> Dict[str, BaseDistribution]:
+        """Get default grid for tuning hyperparameters.
+
+        This grid tunes parameters: ``top_k``, ``use_rank``. Other parameters are expected to be set by the user.
+
+        For ``top_k`` parameter the maximum suggested value is not greater than ``self.top_k``.
+
+        Returns
+        -------
+        :
+            Grid to tune.
+        """
+        return {
+            "top_k": IntDistribution(low=1, high=self.top_k),
+            "use_rank": CategoricalDistribution([False, True]),
+        }

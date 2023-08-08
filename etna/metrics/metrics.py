@@ -1,13 +1,18 @@
-from etna.metrics import mae
-from etna.metrics import mape
-from etna.metrics import medae
-from etna.metrics import mse
-from etna.metrics import msle
-from etna.metrics import r2_score
-from etna.metrics import sign
-from etna.metrics import smape
+from functools import partial
+
 from etna.metrics.base import Metric
 from etna.metrics.base import MetricAggregationMode
+from etna.metrics.functional_metrics import mae
+from etna.metrics.functional_metrics import mape
+from etna.metrics.functional_metrics import max_deviation
+from etna.metrics.functional_metrics import medae
+from etna.metrics.functional_metrics import mse
+from etna.metrics.functional_metrics import msle
+from etna.metrics.functional_metrics import r2_score
+from etna.metrics.functional_metrics import rmse
+from etna.metrics.functional_metrics import sign
+from etna.metrics.functional_metrics import smape
+from etna.metrics.functional_metrics import wape
 
 
 class MAE(Metric):
@@ -31,7 +36,13 @@ class MAE(Metric):
         kwargs:
             metric's computation arguments
         """
-        super().__init__(mode=mode, metric_fn=mae, **kwargs)
+        mae_per_output = partial(mae, multioutput="raw_values")
+        super().__init__(mode=mode, metric_fn=mae_per_output, metric_fn_signature="matrix_to_array", **kwargs)
+
+    @property
+    def greater_is_better(self) -> bool:
+        """Whether higher metric value is better."""
+        return False
 
 
 class MSE(Metric):
@@ -55,7 +66,43 @@ class MSE(Metric):
         kwargs:
             metric's computation arguments
         """
-        super().__init__(mode=mode, metric_fn=mse, **kwargs)
+        mse_per_output = partial(mse, multioutput="raw_values")
+        super().__init__(mode=mode, metric_fn=mse_per_output, metric_fn_signature="matrix_to_array", **kwargs)
+
+    @property
+    def greater_is_better(self) -> bool:
+        """Whether higher metric value is better."""
+        return False
+
+
+class RMSE(Metric):
+    """Root mean squared error metric with multi-segment computation support.
+
+    .. math::
+        RMSE(y\_true, y\_pred) = \\sqrt\\frac{\\sum_{i=0}^{n-1}{(y\_true_i - y\_pred_i)^2}}{n}
+
+    Notes
+    -----
+    You can read more about logic of multi-segment metrics in Metric docs.
+    """
+
+    def __init__(self, mode: str = MetricAggregationMode.per_segment, **kwargs):
+        """Init metric.
+
+        Parameters
+        ----------
+        mode: 'macro' or 'per-segment'
+            metrics aggregation mode
+        kwargs:
+            metric's computation arguments
+        """
+        rmse_per_output = partial(rmse, multioutput="raw_values")
+        super().__init__(mode=mode, metric_fn=rmse_per_output, metric_fn_signature="matrix_to_array", **kwargs)
+
+    @property
+    def greater_is_better(self) -> bool:
+        """Whether higher metric value is better."""
+        return False
 
 
 class R2(Metric):
@@ -78,7 +125,13 @@ class R2(Metric):
         kwargs:
             metric's computation arguments
         """
-        super().__init__(mode=mode, metric_fn=r2_score, **kwargs)
+        r2_per_output = partial(r2_score, multioutput="raw_values")
+        super().__init__(mode=mode, metric_fn=r2_per_output, metric_fn_signature="matrix_to_array", **kwargs)
+
+    @property
+    def greater_is_better(self) -> bool:
+        """Whether higher metric value is better."""
+        return True
 
 
 class MAPE(Metric):
@@ -102,7 +155,13 @@ class MAPE(Metric):
         kwargs:
             metric's computation arguments
         """
-        super().__init__(mode=mode, metric_fn=mape, **kwargs)
+        mape_per_output = partial(mape, multioutput="raw_values")
+        super().__init__(mode=mode, metric_fn=mape_per_output, metric_fn_signature="matrix_to_array", **kwargs)
+
+    @property
+    def greater_is_better(self) -> bool:
+        """Whether higher metric value is better."""
+        return False
 
 
 class SMAPE(Metric):
@@ -126,7 +185,13 @@ class SMAPE(Metric):
         kwargs:
             metric's computation arguments
         """
-        super().__init__(mode=mode, metric_fn=smape, **kwargs)
+        smape_per_output = partial(smape, multioutput="raw_values")
+        super().__init__(mode=mode, metric_fn=smape_per_output, metric_fn_signature="matrix_to_array", **kwargs)
+
+    @property
+    def greater_is_better(self) -> bool:
+        """Whether higher metric value is better."""
+        return False
 
 
 class MedAE(Metric):
@@ -150,7 +215,13 @@ class MedAE(Metric):
         kwargs:
             metric's computation arguments
         """
-        super().__init__(mode=mode, metric_fn=medae, **kwargs)
+        medae_per_output = partial(medae, multioutput="raw_values")
+        super().__init__(mode=mode, metric_fn=medae_per_output, metric_fn_signature="matrix_to_array", **kwargs)
+
+    @property
+    def greater_is_better(self) -> bool:
+        """Whether higher metric value is better."""
+        return False
 
 
 class MSLE(Metric):
@@ -175,7 +246,13 @@ class MSLE(Metric):
             metric's computation arguments
 
         """
-        super().__init__(mode=mode, metric_fn=msle, **kwargs)
+        msle_per_output = partial(msle, multioutput="raw_values")
+        super().__init__(mode=mode, metric_fn=msle_per_output, metric_fn_signature="matrix_to_array", **kwargs)
+
+    @property
+    def greater_is_better(self) -> bool:
+        """Whether higher metric value is better."""
+        return False
 
 
 class Sign(Metric):
@@ -199,7 +276,72 @@ class Sign(Metric):
         kwargs:
             metric's computation arguments
         """
-        super().__init__(mode=mode, metric_fn=sign, **kwargs)
+        sign_per_output = partial(sign, multioutput="raw_values")
+        super().__init__(mode=mode, metric_fn=sign_per_output, metric_fn_signature="matrix_to_array", **kwargs)
+
+    @property
+    def greater_is_better(self) -> None:
+        """Whether higher metric value is better."""
+        return None
 
 
-__all__ = ["MAE", "MSE", "R2", "MSLE", "MAPE", "SMAPE", "MedAE", "Sign"]
+class MaxDeviation(Metric):
+    """Max Deviation metric with multi-segment computation support (maximum deviation value of cumulative sums).
+
+    .. math::
+        MaxDeviation(y\_true, y\_pred) = \\max_{j} | y_j |, where \\, y_j = \\sum_{i=1}^{j}{y\_pred_i - y\_true_i}
+
+    Notes
+    -----
+    You can read more about logic of multi-segment metrics in Metric docs.
+    """
+
+    def __init__(self, mode: str = MetricAggregationMode.per_segment, **kwargs):
+        """Init metric.
+
+        Parameters
+        ----------
+        mode: 'macro' or 'per-segment'
+            metrics aggregation mode
+        kwargs:
+            metric's computation arguments
+        """
+        max_deviation_per_output = partial(max_deviation, multioutput="raw_values")
+        super().__init__(mode=mode, metric_fn=max_deviation_per_output, metric_fn_signature="matrix_to_array", **kwargs)
+
+    @property
+    def greater_is_better(self) -> bool:
+        """Whether higher metric value is better."""
+        return False
+
+
+class WAPE(Metric):
+    """Weighted average percentage Error metric with multi-segment computation support.
+
+    .. math::
+        WAPE(y\_true, y\_pred) = \\frac{\\sum_{i=0}^{n} |y\_true_i - y\_pred_i|}{\\sum_{i=0}^{n}|y\\_true_i|}
+    Notes
+    -----
+    You can read more about logic of multi-segment metrics in Metric docs.
+    """
+
+    def __init__(self, mode: str = MetricAggregationMode.per_segment, **kwargs):
+        """Init metric.
+
+        Parameters
+        ----------
+        mode: 'macro' or 'per-segment'
+            metrics aggregation mode
+        kwargs:
+            metric's computation arguments
+        """
+        wape_per_output = partial(wape, multioutput="raw_values")
+        super().__init__(mode=mode, metric_fn=wape_per_output, metric_fn_signature="matrix_to_array", **kwargs)
+
+    @property
+    def greater_is_better(self) -> bool:
+        """Whether higher metric value is better."""
+        return False
+
+
+__all__ = ["MAE", "MSE", "RMSE", "R2", "MSLE", "MAPE", "SMAPE", "MedAE", "Sign", "MaxDeviation", "WAPE"]

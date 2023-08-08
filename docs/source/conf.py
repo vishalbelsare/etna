@@ -73,11 +73,16 @@ intersphinx_mapping = {
     "scipy": ("https://docs.scipy.org/doc/scipy/", None),
     "torch": ("https://pytorch.org/docs/stable/", None),
     "pytorch_lightning": ("https://pytorch-lightning.readthedocs.io/en/stable/", None),
+    "optuna": ("https://optuna.readthedocs.io/en/v2.10.1/", None)
 }
 
 autodoc_typehints = "both"
 autodoc_typehints_description_target = "all"
 add_module_names = False
+
+autodoc_default_options = {
+    "inherited-members": True,
+}
 
 # Add any paths that contain templates here, relative to this directory.
 templates_path = ["_templates"]
